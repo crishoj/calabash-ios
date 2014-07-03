@@ -171,7 +171,18 @@ class Calabash::Cucumber::Launcher
     end
   end
 
-
+  # simulates touching the iOS Simulator > Reset Content and Settings... menu
+  # item.
+  #
+  #  **WARNING** This is a destructive operation.
+  #  You have been warned.
+  #
+  # @raise RuntimeError if called when targeting a physical device
+  def reset_simulator
+    if device_target?
+      raise "calling 'reset_simulator' when targeting a device is not allowed"
+    end
+    reset_simulator_content_and_settings
   end
 
   def directories_for_sdk_prefix(sdk)
