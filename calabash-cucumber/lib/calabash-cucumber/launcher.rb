@@ -122,22 +122,54 @@ class Calabash::Cucumber::Launcher
     device.ios_version
   end
 
+  # @deprecated Use {#reset_app_sandbox} instead.
   def reset_app_jail(sdk=nil, path=nil)
-    sdk ||= sdk_version || self.simulator_launcher.sdk_detector.latest_sdk_version
-    path ||= self.simulator_launcher.app_bundle_or_raise(app_path)
+    _deprecated('0.10.0', 'use reset_app_sandbox instead', :warn)
+    reset_app_sandbox({:sdk => sdk, :path => path})
+  end
+
+  # resets the app's content and settings by deleting the following directories
+  # from application sandbox:
+  #
+  #  * Library
+  #  * Documents
+  #  * tmp
+  #
+  # generates a warning if called when targeting a physical device
+  #
+  # @param [Hash] opts can pass the target sdk or the path to the application bundle
+  # @option opts [String] :sdk the target sdk
+  # @option opts [String] :path path to the application bundle
+  def reset_app_sandbox(opts={})
+    if device_target?
+      calabash_warn("calling 'reset_app_sandbox' when targeting a device is not allowed")
+      return
+    end
+
+    default_opts = {:sdk => nil,:path => nil}
+    merged_opts = default_opts.merge opts
+
+    sdk ||= merged_opts[:sdk] || sdk_version || self.simulator_launcher.sdk_detector.latest_sdk_version
+    path ||= merged_opts[:path] || self.simulator_launcher.app_bundle_or_raise(app_path)
 
     app = File.basename(path)
-    directories_for_sdk_prefix(sdk).each do |dir|
-      bundle = `find "#{dir}/Applications" -type d -depth 2 -name "#{app}" | head -n 1`
+    directories_for_sdk_prefix(sdk).each do |sdk_dir|
+      app_dir = File.expand_path("#{sdk_dir}/Applications")
+      next unless File.exists?(app_dir)
+
+      bundle = `find "#{app_dir}" -type d -depth 2 -name "#{app}" | head -n 1`
+
       next if bundle.empty? # Assuming we're already clean
+
       if debug_logging?
         puts "Reset app state for #{bundle}"
       end
       sandbox = File.dirname(bundle)
-      ['Library', 'Documents', 'tmp'].each do |dir|
-        FileUtils.rm_rf(File.join(sandbox, dir))
+      ['Library', 'Documents', 'tmp'].each do |content_dir|
+        FileUtils.rm_rf(File.join(sandbox, content_dir))
       end
     end
+  end
 
 
   end
@@ -331,7 +363,7 @@ class Calabash::Cucumber::Launcher
     args[:device] ||= detect_device_from_args(args)
 
 
-    reset_app_jail if args[:reset]
+    reset_app_sandbox({:sdk => nil, :path => args[:app]}) if args[:reset]
 
 
     if args[:privacy_settings]
